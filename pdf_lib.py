@@ -7,19 +7,15 @@ from pdf_param_parser import parse_pdf_parameters
 
 """
 
+PDF LIB - this is meant to provide a way to get the interesting pieces of a PDF out. 
+Initially, this was for object hashing, but as time went on more features were needed resulting in a 
+few changes that hopefully have made this more useful. 
+
 version 2 of the pdf lib
 i think we have to parse xref entry, then xref stream, then stream objects and store them with the other objects
 
-I would alos like it if we could be getting more grainular information from the PDFs we pass through...
-
-
-still need to get the pdf obj hashing (and overall parsing to work)
 I think it would make more sense to keep the std and stream objects separate in terms of parsing the object
 data into the hash, but for searching for URIs and MediaBox values we def need to parse both.
-
-Should we add to the seek functions so we can search the raw objects and the stream/decoded objects, or split that into separate functions?
-
-
 
 I think we need a "follow" function.  You pass an object and if it's a ref object it will pull that object, and keep doing so until it finds the actual objects. 
 
@@ -51,6 +47,7 @@ class pdf_object():
         self.current_obj_number = None
         self.object_registry = {}
         self.current_objects = {}
+        self.visited_xref_pos = set()
         # regex patterns
         self.trailer_pattern = re.compile(b'trailer(?P<trailer_content>.*?)[\x00\x09\x0a\x0c\x0d\x20]{1,}%%EOF', re.MULTILINE+re.DOTALL)
         self.revision_id = re.compile(b'\/ID[\x00\x09\x0a\x0c\x0d\x20]*\[<(?P<current_id>[A-Za-z0-9]{32})><(?P<original_id>[A-Za-z0-9]{32})', re.MULTILINE)
@@ -182,14 +179,29 @@ class pdf_object():
         self.start_list = self.uniq_list(self.start_list)
         if self.timedbg:
             print(f"Timer: {time.time() - self.start_time}")
-        for item in self.start_list:
+        while self.start_list:
+            current_pos = self.start_list.pop(0)
             if self.debug:
-                print(f"--> start list item: {item}")
+                print(f"--> start list item {current_pos}")
+            if current_pos in self.visited_xref_pos:
+                if self.debug:
+                    print(f"loop detected with xref posisiton: {current_pos}")
+                continue
+            self.visited_xref_pos.add(current_pos)
             self.prev_row = None
-            try:
-                self.parse_xref_table(item)
-            except UnboundLocalError:
-                print(f"(trailer_process) EXCEPTION: {self.fname} - {item}")
+            self.parse_xref_table(current_pos)
+            if len(self.start_list) > 100:
+                if self.debug:
+                    print("excessive xref start positions, possible corruption")
+                break
+        # for item in self.start_list:
+        #     if self.debug:
+        #         print(f"--> start list item: {item}")
+        #     self.prev_row = None
+        #     try:
+        #         self.parse_xref_table(item)
+        #     except UnboundLocalError:
+        #         print(f"(trailer_process) EXCEPTION: {self.fname} - {item}")
         if not self.object_offset_list:
             self.seek_obj_fallback()
 
@@ -388,9 +400,7 @@ class pdf_object():
             else:
                 val2 = int.from_bytes(line[1], 'big')
             val3 = int.from_bytes(line[2], 'big')
-            # Add after line 388 (after val3 = int.from_bytes(line[2], 'big')):
-            obj_num = len(parsed_data)  # Current object number
-
+            obj_num = len(parsed_data)
             if entry_type == 1:  # Normal object
                 # Existing code for object_offset_list
                 self.register_object_from_xref(obj_num, val3, val2, "in-use")
@@ -810,7 +820,6 @@ class pdf_object():
                         obj_data["object_type"] = next(iter(param_dict))
         if obj_data["object_type"] == None:
             obj_data["object_type"] = "None"
-        #print(obj_data["object_type"])
         self.obj_dicts.append(obj_data)
 
     # sorting objects
