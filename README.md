@@ -8,7 +8,7 @@ Starting with a generic python library. I wanted this to help streamline creatin
 Command line tool to generate the PDF object hash of a given PDF.  Also supports scanning an entire directory.
 
 ``` 
-usage: pdf_obj_hash_v2.py [-h] [-f FILE] [-d DIR] [--ftrace] [--debug] [--time-trace] [--print-hash-string] [--hunt-string HUNT_STRING] [--print-info]
+usage: pdf_obj_hash.py [-h] [-f FILE] [-d DIR] [--ftrace] [--debug] [--time-trace] [--print-hash-string] [--hunt-string HUNT_STRING] [--print-info]
 
 Generate a PDF Object Hash of the provided file or files.
 
