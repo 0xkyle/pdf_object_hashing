@@ -35,10 +35,3 @@ Recent updates to `pdf_obj_hash.py` and `pdf_lib.py` change how we parse objects
 ## pdf_lib.py
 This is a python library for analyzing PDFs. 
 
-Current features:
-- parse xref table, xref streams, objects, stream objects, etc.
-- extract stream content
-- search object by object number, type, or some parameters 
-
-Wish list:
-- can we follow a chain of objects/ref objects? I don't remember if I added that or not.
