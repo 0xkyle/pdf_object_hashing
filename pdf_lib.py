@@ -194,14 +194,6 @@ class pdf_object():
                 if self.debug:
                     print("excessive xref start positions, possible corruption")
                 break
-        # for item in self.start_list:
-        #     if self.debug:
-        #         print(f"--> start list item: {item}")
-        #     self.prev_row = None
-        #     try:
-        #         self.parse_xref_table(item)
-        #     except UnboundLocalError:
-        #         print(f"(trailer_process) EXCEPTION: {self.fname} - {item}")
         if not self.object_offset_list:
             self.seek_obj_fallback()
 
