@@ -194,8 +194,15 @@ class pdf_object():
                 if self.debug:
                     print("excessive xref start positions, possible corruption")
                 break
+        if self.debug:
+            print(f"After xref processing: object_offset_list has {len(self.object_offset_list)} entries")
+            print(f"xref_entries: std={len(self.xref_entries['std'])}, stream={len(self.xref_entries['stream'])}")
         if not self.object_offset_list:
+            if self.debug:
+                print(f"[!] No objects in offset list, triggering fallback")
             self.seek_obj_fallback()
+        elif self.debug:
+            print(f"Skipping fallback, found {len(self.object_offset_list)} objects")
 
     def parse_xref_table(self, start_pos):
         """
@@ -218,27 +225,37 @@ class pdf_object():
             xref_content = xref_data.group('xref_data').decode()
             xref_list = xref_content.split(split_char)
             cur_xref_table = []
+            start = 0
+            count = 0
             for i in xref_list:
                 entry_list = [x for x in i.split(' ') if x]
                 if len(entry_list) == 2:
-                    start, count = entry_list
-                    start = int(start)
-                    count = int(count)
+                    try:
+                        start = int(entry_list[0])
+                        count = int(entry_list[1])
+                    except ValueError:
+                        if self.debug:
+                            print(f"(parse_xref_table) EXCEPTION: {self.fname} - {entry_list}")
+                        continue
                 elif len(entry_list) == 3:
-                    object_offset, generation_id, free_in_use = entry_list
-                    object_offset = int(object_offset)
-                    generation_id = int(generation_id)
-                    if len(free_in_use) > 1:
-                        free_in_use = free_in_use[0:1]
-                    if free_in_use == "n":
-                        free_in_use = "in-use"
-                    else:
-                        free_in_use = "free"
-                    start += 1
-                    if free_in_use == "in-use" and (object_offset not in self.object_offset_list):
-                        self.object_offset_list.append(object_offset)
-                    cur_xref_table.append([object_offset, generation_id, free_in_use])
-                    self.register_object_from_xref(start-1, generation_id, object_offset, free_in_use)
+                    try:
+                        object_offset, generation_id, free_in_use = entry_list
+                        object_offset = int(object_offset)
+                        generation_id = int(generation_id)
+                        if len(free_in_use) > 1:
+                            free_in_use = free_in_use[0:1]
+                        if free_in_use == "n":
+                            free_in_use = "in-use"
+                        else:
+                            free_in_use = "free"
+                        if free_in_use == "in-use" and (object_offset not in self.object_offset_list):
+                            self.object_offset_list.append(object_offset)
+                        cur_xref_table.append([object_offset, generation_id, free_in_use])
+                        self.register_object_from_xref(start, generation_id, object_offset, free_in_use)
+                        start += 1
+                    except (ValueError, IndexError) as e:
+                        if self.debug:
+                            print(f"parse_xref_table invalid xref entry: {self.fname} - {entry_list} - {e}")
             if len(cur_xref_table) > 1:
                 self.xref_entries["std"].append(cur_xref_table)
         else:
@@ -334,7 +351,15 @@ class pdf_object():
         """
         if self.func_trace:
             print(f"function: decode_xref_stream")
+        if "W" not in param_dict:
+            if self.debug:
+                print(f"[-] decode_xref_stream: Missing W parameter in {self.fname}")
+            return False
         w_array = param_dict["W"]
+        if not w_array or len(w_array) != 3:
+            if self.debug:
+                print(f"[-] decode_xref_stream: Invalid W array in {self.fname}: {w_array}")
+            return False
         predictor = int(param_dict.get("Predictor", 0))
         predictor_add = 0
         if predictor > 1:
@@ -349,6 +374,7 @@ class pdf_object():
             width += int(i)
             w.append(int(i))
         data = stream_bytes.replace(b'stream\x0d\x0a', b'').replace(b'\x0d\x0aendstream',b'').replace(b'stream\x0a', b'').replace(b'\x0aendstream',b'').replace(b'stream\x0d', b'').replace(b'\x0dendstream',b'')
+        decompressed = None
         try:
             decompressed = zlib.decompress(data)
         except zlib.error as z:
@@ -358,10 +384,13 @@ class pdf_object():
                 print(f"[-] zlib fail -- failed with file {self.fname}")
                 if self.debug:
                     print(z)
-                    fp = open('zlib_error.bin','wb')
+                    hash = hashlib.md5(data).hexdigest()
+                    fp = open(f'zlib_error_{hash}.bin','wb')
                     fp.write(data)
                     fp.close()
-                    exit()
+                return False
+        if decompressed is None:
+            return False
         stream_list = []
         if len(decompressed) % (width + predictor_add) == 0:
             off = width + predictor_add
@@ -373,6 +402,7 @@ class pdf_object():
         if self.debug:
             print(f"--> decode_xref_stream: stream_list: {stream_list}")
         self.stream_list_parse(stream_list)
+        return True
 
     def stream_list_parse(self, stream_list):
         """
@@ -908,6 +938,7 @@ class pdf_object():
         """
         Parse objects using xref-aware approach that handles revisions properly.
         Only processes the current (highest generation) version of each object.
+        Falls back to object_offset_list if xref parsing failed.
         """
         if self.func_trace:
             print("function: pull_objects_xref_aware")
@@ -915,6 +946,11 @@ class pdf_object():
         # Get offsets for current objects only
         current_offsets = self.get_current_object_offsets()
         
+        # If no xref entries found, fall back to object_offset_list (from seek_obj_fallback)
+        if not current_offsets and self.object_offset_list:
+            if self.debug:
+                print(f"[!] No xref entries, using fallback object_offset_list with {len(self.object_offset_list)} objects")
+            current_offsets = self.object_offset_list
         if self.debug:
             print(f"Processing {len(current_offsets)} current objects (out of {len(self.object_registry)} total xref entries)")
         
@@ -982,6 +1018,10 @@ class pdf_object():
         """
         if in_use_only:
             current_offsets = self.get_current_object_offsets()
+            if not current_offsets and self.object_offset_list:
+                if self.debug:
+                    print(f"get_objects_by_file_order using fallback list with {len(self.object_offset_list)} objects")
+                current_offsets = self.object_offset_list
             file_ordered_objects = []
             for offset in current_offsets:
                 for obj in self.obj_dicts:
