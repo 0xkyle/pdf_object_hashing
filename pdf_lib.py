@@ -351,7 +351,15 @@ class pdf_object():
         """
         if self.func_trace:
             print(f"function: decode_xref_stream")
+        if "W" not in param_dict:
+            if self.debug:
+                print(f"[-] decode_xref_stream: Missing W parameter in {self.fname}")
+            return False
         w_array = param_dict["W"]
+        if not w_array or len(w_array) != 3:
+            if self.debug:
+                print(f"[-] decode_xref_stream: Invalid W array in {self.fname}: {w_array}")
+            return False
         predictor = int(param_dict.get("Predictor", 0))
         predictor_add = 0
         if predictor > 1:
@@ -366,6 +374,7 @@ class pdf_object():
             width += int(i)
             w.append(int(i))
         data = stream_bytes.replace(b'stream\x0d\x0a', b'').replace(b'\x0d\x0aendstream',b'').replace(b'stream\x0a', b'').replace(b'\x0aendstream',b'').replace(b'stream\x0d', b'').replace(b'\x0dendstream',b'')
+        decompressed = None
         try:
             decompressed = zlib.decompress(data)
         except zlib.error as z:
@@ -375,10 +384,13 @@ class pdf_object():
                 print(f"[-] zlib fail -- failed with file {self.fname}")
                 if self.debug:
                     print(z)
-                    fp = open('zlib_error.bin','wb')
+                    hash = hashlib.md5(data).hexdigest()
+                    fp = open(f'zlib_error_{hash}.bin','wb')
                     fp.write(data)
                     fp.close()
-                    exit()
+                return False
+        if decompressed is None:
+            return False
         stream_list = []
         if len(decompressed) % (width + predictor_add) == 0:
             off = width + predictor_add
@@ -390,6 +402,7 @@ class pdf_object():
         if self.debug:
             print(f"--> decode_xref_stream: stream_list: {stream_list}")
         self.stream_list_parse(stream_list)
+        return True
 
     def stream_list_parse(self, stream_list):
         """
