@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-object-hashing"
+version = "0.2.0"
+description = "PDF analysis library for generating structural hashes of PDF objects."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "Apache 2.0"}
+authors = [
+	{name = "Kyle Eaton"}
+]
+dependencies = []
+
+[project.scripts]
+pdf-obj-hash = "pdf_object_hashing.pdf_obj_hash:main"
+
+[project.urls]
+Homepage = "https://www.proofpoint.com/us/blog/threat-insight/proofpoint-releases-innovative-detections-threat-hunting-pdf-object-hashing"
+Repository = "https://github.com/0xkyle/pdf_object_hashing"
+"Upstream Repository" = "https://github.com/EmergingThreats/pdf_object_hashing"
+
+
