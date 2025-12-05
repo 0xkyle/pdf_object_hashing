@@ -28,9 +28,14 @@ we need a function to parse out any ref objects found in an object's parameters,
 
 
 class pdf_object():
-    def __init__(self, fname):
+    def __init__(self, fname=None, fdata=None):
+        if fname is None and fdata is None:
+            raise ValueError("must provide either fname or fdata")
         self.fname = fname
-        self.fdata = open(fname, 'rb').read()
+        if fname is not None:
+            self.fdata = open(fname, 'rb').read()
+        if fdata is not None:
+            self.fdata = fdata
         self.sha256 = hashlib.sha256(self.fdata).hexdigest()
         # data and objects 
         self.start_list = []
@@ -50,14 +55,14 @@ class pdf_object():
         self.visited_xref_pos = set()
         # regex patterns
         self.trailer_pattern = re.compile(b'trailer(?P<trailer_content>.*?)[\x00\x09\x0a\x0c\x0d\x20]{1,}%%EOF', re.MULTILINE+re.DOTALL)
-        self.revision_id = re.compile(b'\/ID[\x00\x09\x0a\x0c\x0d\x20]*\[<(?P<current_id>[A-Za-z0-9]{32})><(?P<original_id>[A-Za-z0-9]{32})', re.MULTILINE)
+        self.revision_id = re.compile(rb'/ID[\x00\x09\x0a\x0c\x0d\x20]*\[<(?P<current_id>[A-Za-z0-9]{32})><(?P<original_id>[A-Za-z0-9]{32})', re.MULTILINE)
         self.trailer_pattern2 = re.compile(b'(startxref.*?%%EOF)', re.MULTILINE+re.DOTALL)
         self.startxref_pattern = re.compile(b'startxref[\x00\x09\x0a\x0c\x0d\x20]{1,}([0-9]{1,})[\x00\x09\x0a\x0c\x0d\x20]{1,}')
         self.xref_pattern = re.compile(b'xref(?P<split_char>[\x00\x09\x0a\x0c\x0d\x20]{1,})(?P<xref_data>[0-9]{1,}.*?)trailer', re.MULTILINE+re.DOTALL)
         self.prev_xref = re.compile(b'/Prev[\x00\x09\x0a\x0c\x0d\x20]{1,}([0-9]{1,})', re.MULTILINE+re.DOTALL)
         self.stream_pattern2 = re.compile(b'(?P<obj_number>[0-9]{1,}) (?P<generation_id>[0-9]{1,}) obj[\x00\x09\x0a\x0c\x0d\x20]{1,}(?P<unk_data>.*?)(?P<stream_data>stream[\x0d\x0a].*?[\x0d\x0a]endstream)', re.MULTILINE+re.DOTALL)
         self.params_decode = re.compile(b'/DecodeParms[\x00\x09\x0a\x0c\x0d\x20]*?<<(?P<decode_params>.*?)>>', re.MULTILINE+re.DOTALL)
-        self.params_w = re.compile(b'/W[\x00\x09\x0a\x0c\x0d\x20]*?\[(?P<w_array>.*?)\]')
+        self.params_w = re.compile(rb'/W[\x00\x09\x0a\x0c\x0d\x20]*?\[(?P<w_array>.*?)\]')
         self.objstm_pattern = re.compile(b'(?P<obj_number>[0-9]{1,}) (?P<generation_id>[0-9]{1,}) obj[\x00\x09\x0a\x0c\x0d\x20]*?<<(?P<params>.*?)>>[\x00\x09\x0a\x0c\x0d\x20]*?stream([\x0d\x0a]*)(?P<stream>.*?)\3endstream', re.MULTILINE+re.DOTALL)
         self.n_extract = re.compile(b'/N[\x00\x09\x0a\x0c\x0d\x20]*?(?P<n_param>[0-9]{1,})', re.DOTALL)
         self.first_extract = re.compile(b'/First[\x00\x09\x0a\x0c\x0d\x20]*?(?P<first_param>[0-9]{1,})', re.DOTALL)
@@ -106,7 +111,7 @@ class pdf_object():
             offset_list.append(match.start() + 1)
         if self.timedbg:
             print(f"Timer: {time.time() - self.start_time}")
-        xrefstream_regex = re.compile(b'[0-9]{1,} [0-9]{1,} obj[\x00\x09\x0a\x0c\x0d\x20]{1,}.*?\/XRef')
+        xrefstream_regex = re.compile(b'[0-9]{1,} [0-9]{1,} obj[\x00\x09\x0a\x0c\x0d\x20]{1,}.*?/XRef')
         for match in xrefstream_regex.finditer(self.fdata):
             if self.debug:
                 print(f"--> xref stream match found: {match}")
