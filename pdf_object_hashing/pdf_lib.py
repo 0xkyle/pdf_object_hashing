@@ -67,7 +67,7 @@ class pdf_object():
         self.n_extract = re.compile(b'/N[\x00\x09\x0a\x0c\x0d\x20]*?(?P<n_param>[0-9]{1,})', re.DOTALL)
         self.first_extract = re.compile(b'/First[\x00\x09\x0a\x0c\x0d\x20]*?(?P<first_param>[0-9]{1,})', re.DOTALL)
         self.object_pattern = re.compile(b'(?P<obj_number>[0-9]{1,}) (?P<generation_id>[0-9]{1,}) obj[\x00\x09\x0a\x0c\x0d\x20]{1,}(?P<full_obj_data>.*>>)[\x00\x09\x0a\x0c\x0d\x20]?(stream(?P<stream_data>.*?)endstream)?.*?endobj', re.MULTILINE+re.DOTALL)
-        self.object_pattern_big = re.compile(b'(?P<obj_number>[0-9]{1,}) [0-9]{1,} obj(?P<ws>[\x00\x09\x0a\x0c\x0d\x20]{1,})(?P<unparsed>.*?)[\x00\x09\x0a\x0c\x0d\x20]{1,}endobj', re.MULTILINE+re.DOTALL)
+        self.object_pattern_big = re.compile(b'(?P<obj_number>[0-9]{1,}) [0-9]{1,} obj(?P<ws>[\x00\x09\x0a\x0c\x0d\x20]*)(?P<unparsed>.*?)[\x00\x09\x0a\x0c\x0d\x20]*endobj', re.MULTILINE+re.DOTALL)
         #self.obj_params_pattern = re.compile(b'\<\<(?P<params>.*)\>\>', re.MULTILINE+re.DOTALL)
         self.obj_params_pattern = re.compile(b'(?P<params><<.*>>)stream|(?P<params2><<.*>>)', re.MULTILINE+re.DOTALL)
         self.obj_stream_pattern = re.compile(b'stream([\x0d\x0a]*)(?P<stream>.*?)\1endstream', re.MULTILINE+re.DOTALL)
@@ -794,7 +794,7 @@ class pdf_object():
 
         """
         if self.func_trace:
-            print("function: parse_pdf_object")
+            print(f"function: parse_pdf_object -- offset: {start_pos}")
         end = b'endobj'
         end_pos = self.fdata.find(end, start_pos)
         obj_data = {
